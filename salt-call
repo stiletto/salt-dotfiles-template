@@ -1,0 +1,41 @@
+#!/bin/bash
+set -eu -o pipefail
+DOTFILES="$(dirname -- "$(readlink -f -- "$0")")" #"
+MINION_CONFIG="$DOTFILES/minion"
+cd "$DOTFILES"
+
+SALT_VERSION="salt>=2018.3,<2018.4"
+
+if [ ! -f "$MINION_CONFIG" -o "$0" -nt "$MINION_CONFIG" ]; then
+  echo -n "Regenerating minion configuration..." >&2
+  CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/salt"
+  cat > "${MINION_CONFIG}.new" <<EOF
+backup_mode: minion
+conf_file: ${DOTFILES}/minion
+cachedir: ${CACHE}/minion
+extension_modules: ${CACHE}/minion/extmods
+file_client: local
+file_roots:
+  base:
+    - ${DOTFILES}
+id: $(hostname)
+log_file: ${HOME}/.salt.log
+pillar_roots:
+  base:
+    - ${DOTFILES}/_pillar
+EOF
+  mv "${MINION_CONFIG}.new" "$MINION_CONFIG"
+  echo "done." >&2
+fi
+
+SALT_CALL="$(which salt-call)" || true
+if [ "$SALT_CALL" = "" ]; then
+  SALT_CALL="$DOTFILES/.salt/bin/salt-call"
+  if [ ! -s "$SALT_CALL" ]; then
+    echo "Installing salt..."
+    virtualenv -p python2 --system-site-packages "$DOTFILES/.salt"
+    "$DOTFILES/.salt/bin/pip" install "${SALT_VERSION}"
+  fi
+fi
+
+exec "$SALT_CALL" --local -c "$DOTFILES" "$@"
