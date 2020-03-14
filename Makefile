@@ -3,4 +3,7 @@ all: apply
 apply:
 	bash ./salt-call state.apply
 
-.PHONY: apply
+sync_grains:
+	bash ./salt-call saltutil.sync_grains -l debug
+
+.PHONY: apply sync_grains
